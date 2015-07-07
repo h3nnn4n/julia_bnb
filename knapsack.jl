@@ -36,7 +36,7 @@ function timed(i)
     return time
 end
 
-function para()
+function para(start, step, stop, num)
     randKnapSack(100)
 
     @everywhere require("knapsack.jl")
@@ -45,7 +45,6 @@ function para()
     xaxis = Int64[]
     yaxis = Float64[]
 
-
     time = 0.0
 
     x = [ @spawn timed(100) for j in 1:4 ]
@@ -53,23 +52,16 @@ function para()
 
     println("Starting")
 
-    for i in 2500:2500:200000
+    for i in start:step:stop
 
         time = 0.0
 
-        x = [ @spawn timed(i) for j in 1:4 ]
-        @sync time += (fetch(x[1]) + fetch(x[2]) + fetch(x[3]) + fetch(x[4]))
+        x = [ @spawn timed(i) for j in 1:num ]
+        @sync for j in 1:num
+            time += fetch(x[j])
+        end
 
-        x = [ @spawn timed(i) for j in 1:4 ]
-        @sync time += (fetch(x[1]) + fetch(x[2]) + fetch(x[3]) + fetch(x[4]))
-
-        x = [ @spawn timed(i) for j in 1:4 ]
-        @sync time += (fetch(x[1]) + fetch(x[2]) + fetch(x[3]) + fetch(x[4]))
-
-        x = [ @spawn timed(i) for j in 1:4 ]
-        @sync time += (fetch(x[1]) + fetch(x[2]) + fetch(x[3]) + fetch(x[4]))
-
-        time /= 16.0
+        time /= num
 
         @printf "%f %d\n" time i
 
