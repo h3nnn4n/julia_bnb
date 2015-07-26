@@ -74,27 +74,8 @@ function para(start, step, stop, num)
     return yaxis
 end
 
-function test()
+function test(xaxis, yaxis)
     using Gadfly
-
-    randKnapSack(100)
-
-    xaxis = Int64[]
-    yaxis = Float64[]
-
-    println("Starting")
-
-    for i in 1000:2500:20000
-        tic()
-        randKnapSack(i)
-        time = toq()
-        @printf "%f %d\n" time i
-
-        push!(xaxis, i)
-        push!(yaxis, time)
-    end
-
-    println("Finished")
 
     p = plot(x = xaxis, y = yaxis, Geom.point, Geom.smooth, Theme(panel_fill=color("white")))
     draw(PNG("dataplot.png", 36cm, 24cm), p)
