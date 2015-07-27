@@ -13,12 +13,14 @@ m = Model()
 n = copy(m)
 
 ## New constraint using the same variables is added to the copy
-@addConstraint(n, 2x + 3y <= 3.0 )
+@addConstraint(n, getVar(n, :x) + getVar(n, :y) <= 3.0 )
 
 solve(m)
 
 ## Error Here
 solve(n)
+
+print(n)
 
 #  h3nnn4n@clusterfuck ~/julia_bnb (git)-[master] % julia bug.jl
 #  ERROR: Variable not owned by model present in constraints
