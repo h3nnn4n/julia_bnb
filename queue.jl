@@ -16,24 +16,23 @@ end
 isless (x :: instance, y :: instance) = getObjectiveValue(x.m) < getObjectiveValue(y.m)
 
 function updateKnapSack_down(problem :: instance, varIndex :: Int)
-    #=@addConstraint(problem.m, problem.x[varIndex] <= floor((problem.x[varIndex])))=#
+    #=@addConstraint(problem.m, getVar(problem.m, :x)[varIndex] <= 0.0)=#
 
-    @addConstraint(problem.m, problem.x[varIndex] <= 0.0)
+    var = getVar(problem.m, :x)[varIndex]
+    @addConstraint(problem.m, var <= 0.0)
 
     status = solve(problem.m)
-
-    println(problem.m)
 
     return status, problem
 end
 
 function updateKnapSack_up(problem :: instance, varIndex :: Int)
-    #=@addConstraint(problem.m, problem.x[varIndex] >=  ceil((problem.x[varIndex])))=#
-    @addConstraint(problem.m, problem.x[varIndex] >=  1.0)
+    #=@addConstraint(problem.m, getVar(problem.m, :x)[varIndex] >= 1.0)=#
+
+    var = getVar(problem.m, :x)[varIndex]
+    @addConstraint(problem.m, var >= 1.0)
 
     status = solve(problem.m)
-
-    println(problem.m)
 
     return status, problem
 end
@@ -41,14 +40,14 @@ end
 function randKnapSack(size)
     problem = instance(Model(), rand(1:size,size), rand(1:size,size), size, rand(1:size * 2), [])
 
-    @defVar(problem.m, problem.x[1:size])
+    @defVar(problem.m, x[1:size])
 
-    @setObjective(problem.m, Max, dot(problem.profit, problem.x))
+    @setObjective(problem.m, Max, dot(problem.profit, x))
 
-    @addConstraint(problem.m, dot(problem.weight, problem.x) <= problem.capacity)
+    @addConstraint(problem.m, dot(problem.weight, x) <= problem.capacity)
 
     for i in 1:size
-        @addConstraint(problem.m, 0.0 <= problem.x[i] <= 1.0)
+        @addConstraint(problem.m, 0.0 <= x[i] <= 1.0)
     end
 
     status = solve(problem.m)
@@ -102,33 +101,35 @@ function main()
         solved = true
 
         if length(h) == 0
-            println("\n\n")
+            println("\n---------------------------\n")
 
             println("Solution:")
-            println(top(h).m)
-            println(top(h).x)
+            println(w.m)
+            println("\n", [getValue(getVar(w.m, :x)[i]) for i in 1:top(h).size] ,"\n")
 
             break
         end
-        println("\n", [getValue(top(h).x[i]) for i in 1:top(h).size] ,"\n")
+
+        println("\n", [getValue(getVar(top(h).m, :x)[i]) for i in 1:top(h).size] ,"\n")
 
         w = pop!(h)
 
         for i in 1:size
-            if isInt(getValue(w.x[i])) == false
+            if isInt(getValue(getVar(w.m, :x)[i])) == false
                 println("")
                 println("heap size = ", length(h))
-                println("#$c braching at ", i, " x[$i] = ", getValue(w.x[i]))
+                println("#$c braching at ", i, " x[$i] = ", getValue(getVar(w.m, :x)[i]))
                 s1, down = updateKnapSack_down(instance(copy(w.m), w.weight, w.profit, w.size, w.capacity, (w.x)), i)
+                s2, up   = updateKnapSack_up  (instance(copy(w.m), w.weight, w.profit, w.size, w.capacity, (w.x)), i)
                 #=s2, up   = updateKnapSack_up  (deepcopy(w), i)=#
 
                 if s1 == :Optimal
                     push!(h, down)
                 end
 
-                #=if s2 == :Optimal=#
-                    #=push!(h, up)=#
-                #=end=#
+                if s2 == :Optimal
+                    push!(h, up)
+                end
 
                 #=println(" ==> ", getObjectiveValue(down.m), " && ", getObjectiveValue(up.m))=#
 
@@ -143,13 +144,20 @@ function main()
             end
         end
 
-        if c == 10
+        if solved && length(h) > 0
+            println("\n---------------------------\n")
+
+            println("Solution:")
+            println(w.m)
+            println("\n", [getValue(getVar(w.m, :x)[i]) for i in 1:top(h).size] ,"\n")
+
             break
-        else
-            c += 1
         end
 
+        #=if c == 10=#
+            #=break=#
+        #=else=#
+            #=c += 1=#
+        #=end=#
     end
-
-
 end
