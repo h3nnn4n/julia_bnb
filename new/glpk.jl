@@ -20,17 +20,19 @@ type Instance
 end
 
 Base.isless   (x :: Instance, y :: Instance) = (x.obj) < (y.obj)
-Base.isless   (x :: Instance, y)             = (x.obj) < (y)
+Base.isless   (x :: Instance, y            ) = (x.obj) < (y)
 Base.isless   (x            , y :: Instance) = (x)     < (y.obj)
 
-Base.copy          (x :: Instance)           = Instance(copy(x.weight), copy(x.profit), copy(x.size), copy(x.capacity), copy(x.x), copy(x.restrictions), copy(x.obj))
-Base.copy          (x :: Restriction)        = Restriction(copy(x.boundPos), copy(x.boundType))
+Base.copy     (x :: Instance               ) = Instance(copy(x.weight), copy(x.profit), copy(x.size), copy(x.capacity), copy(x.x), copy(x.restrictions), copy(x.obj))
+Base.copy     (x :: Restriction            ) = Restriction(copy(x.boundPos), copy(x.boundType))
 
-debug  = false
-debug2 = false
+Base.print    (x :: Instance               ) = println(x) 
 
-debug  = true
-#=debug2 = true=#
+aculAns = true
+output  = false
+
+debug   = false
+debug2  = false
 
 @everywhere function isInt(n)
     return abs(n) == trunc(abs(n))
@@ -57,8 +59,8 @@ end
                         -1.0
                         )
     else
-        return Instance([3, 5, 1, 2, 3, 6, 7, 2, 8, 1],
-                        [1, 3, 2, 4, 2, 3, 6, 2, 3, 3],
+        return Instance([9,9,1,1,6,7,8,8,7,8], #[3, 5, 1, 2, 3, 6, 7, 2, 8, 1],
+                        [6,7,3,6,2,9,6,4,4,6], #[1, 3, 2, 4, 2, 3, 6, 2, 3, 3],
                         10,
                         10,
                         [],
@@ -73,6 +75,14 @@ param.msg_lev = GLPK.MSG_ERR
 param.presolve = GLPK.ON
 
 @everywhere function doKnapSack(w :: Instance)
+
+    for i in 1:length(w.x)[1]
+        #=println(i)=#
+        if w.x[i] < 0.0 || w.x[i] > 1.0
+            return None
+        end
+    end
+
     weight   = w.weight
     profit   = w.profit
     capacity = w.capacity 
@@ -93,9 +103,7 @@ param.presolve = GLPK.ON
     for i in 1:w.size
         GLPK.set_obj_coef(lp, i, w.profit[i])
 
-        #=if empty[i]=#
         GLPK.set_col_bnds(lp, i, GLPK.DB, 0.0, 1.0)
-        #=end=#
     end
 
     for i in 1:size(w.restrictions)[1]
@@ -106,7 +114,13 @@ param.presolve = GLPK.ON
                               ceil(w.x[w.restrictions[i].boundPos])) end
 
 
-            GLPK.set_col_bnds(lp, w.restrictions[i].boundPos, GLPK.LO, ceil(w.x[w.restrictions[i].boundPos]), 0.0)
+            GLPK.set_col_bnds(lp, 
+                              w.restrictions[i].boundPos, 
+                              GLPK.FX, 
+                              ceil(w.x[w.restrictions[i].boundPos]),
+                              1.0
+                              )
+
             #=empty[w.restrictions[i].boundPos] = false=#
 
         elseif w.restrictions[i].boundType == -1
@@ -115,7 +129,11 @@ param.presolve = GLPK.ON
                                w.x[w.restrictions[i].boundPos], " ",
                                floor(w.x[w.restrictions[i].boundPos])) end
 
-            GLPK.set_col_bnds(lp, w.restrictions[i].boundPos, GLPK.UP, 0.0, floor(w.x[w.restrictions[i].boundPos]))
+            GLPK.set_col_bnds(lp, 
+                              w.restrictions[i].boundPos,
+                              GLPK.FX,
+                              0.0,
+                              floor(w.x[w.restrictions[i].boundPos]))
             #=empty[w.restrictions[i].boundPos] = false=#
 
         end
@@ -150,9 +168,12 @@ end
     return q
 end
 
-function main()
+function main(size, random)
 
-    lp = doKnapSack(newKnapSack(10, false)) 
+    heapSize = 1
+    feasible = Instance[]
+
+    lp = doKnapSack(newKnapSack(size, random)) 
 
     heap = binary_maxheap(Instance)
 
@@ -161,7 +182,7 @@ function main()
     best = 0.0
     bestSol = (lp)
 
-    stopper = 100
+    stopper = 10000
 
     while length(heap) > 0
         stopper -= 1
@@ -177,8 +198,12 @@ function main()
 
             if isSolved(w)
                 if w.obj > best
-                    best    = w.obj
-                    bestSol = w
+
+                    best, bestSol = w.obj, w
+
+                    if aculAns 
+                        push!(feasible, w)
+                    end
                 end
 
                 if debug println("\nFeasible solution found!\n") end
@@ -191,25 +216,33 @@ function main()
                         down = branchDown( copy(w), i, -1 )
                         up   = branchUp  ( copy(w), i, +1 )
 
+                        heapSize += 2
+
                         if debug println(up.obj, " ", down.obj, " $best") end
 
-                        if up > best
+                        if up != None && up > best
                             if isSolved(up)
                                 if debug println("\nFeasible solution found!\n", up, "\n") end
 
-                                best    = up.obj
-                                bestSol = up
+                                best, bestSol = up.obj, up
+
+                                if aculAns 
+                                    push!(feasible, up)
+                                end
                             end
 
                             push!(heap, up)
                         end
 
-                        if down > best
+                        if down != None && down > best
                             if isSolved(down)
                                 if debug println("\nFeasible solution found!\n", down, "\n") end
 
-                                best    = down.obj
-                                bestSol = down
+                                best, bestSol = down.obj, down
+
+                                if aculAns 
+                                    push!(feasible, down)
+                                end
                             end
 
                             push!(heap, down)
@@ -221,5 +254,22 @@ function main()
             end
         end
     end
+
+    if output
+        println("\n======================================================")
+
+        if aculAns
+            for ans in feasible
+                println(ans.obj, "")
+            end
+        else
+            println(best)
+        end
+        println(  "======================================================")
+    end
+
+    return heapSize
+
 end
 
+for i in 100:100:10000 tic(); x = main(i, true); println("$i ", toq(), " $x") end
