@@ -28,7 +28,7 @@ set style line 6 lc rgb '#98cdc5' pt 6 ps 1 lt 1 lw 2 # --- grey-cyan-thing
 #set logscale y
 
 set xrange [100:3250]
-#set yrange [0.1:10000]
+set yrange [0  :1500]
 
 set key top left
 
@@ -65,12 +65,26 @@ fit f3(x) 'data3_5x.log'    using 1:2 via a3, b3, c3, d3
 fit f4(x) 'data4_25x.log'   using 1:2 via a4, b4, c4, d4
 fit f6(x) 'data6_100x.log'  using 1:2 via a6, b6, c6, d6
 
-plot    'data2.log'           using 1:2 title 'x1'         with points ls 1, \
-        'data3_5x.log'        using 1:2 title 'x5'         with points ls 2, \
-        'data4_25x.log'       using 1:2 title 'x25'        with points ls 3, \
-        'data6_100x.log'      using 1:2 title 'x100'       with points ls 4, \
-        f2(x)                           title 'fit x1'     with lines  ls 1, \
-        f3(x)                           title 'fit x5'     with lines  ls 2, \
-        f4(x)                           title 'fit x50'    with lines  ls 3, \
-        f6(x)                           title 'fit x100'   with lines  ls 4
+#plot    'data2.log'      using 1:2 title 'x1'   with points ls 1, \
+        #'data3_5x.log'   using 1:2 title 'x5'   with points ls 2, \
+        #'data4_25x.log'  using 1:2 title 'x25'  with points ls 3, \
+        #'data6_100x.log' using 1:2 title 'x100' with points ls 4
 
+plot    f2(x)                      title 'x1'   with lines  ls 1, \
+        f3(x)                      title 'x5'   with lines  ls 2, \
+        f4(x)                      title 'x50'  with lines  ls 3, \
+        f6(x)                      title 'x100' with lines  ls 4
+
+#plot    'data2.log'      using 1:2 title 'x1'   with points ls 1, \
+        #'data3_5x.log'   using 1:2 title 'x5'   with points ls 2, \
+        #'data4_25x.log'  using 1:2 title 'x25'  with points ls 3, \
+        #'data6_100x.log' using 1:2 title 'x100' with points ls 4, \
+        #f2(x)                      notitle      with lines  ls 1, \
+        #f3(x)                      notitle      with lines  ls 2, \
+        #f4(x)                      notitle      with lines  ls 3, \
+        #f6(x)                      notitle      with lines  ls 4
+                                      
+#
+#
+#
+#
