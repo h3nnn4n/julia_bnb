@@ -1,12 +1,12 @@
 using GLPK
 using DataStructures
 
-type Restriction
+@everywhere type Restriction
     boundPos     :: Int
     boundType    :: Int  # -1 is lessThan and +1 is greaterThan, 0 is nothing
 end
 
-type Instance
+@everywhere type Instance
     weight       :: Array{Int}
     profit       :: Array{Int}
     size         :: Int
@@ -28,11 +28,11 @@ Base.copy     (x :: Restriction            ) = Restriction(copy(x.boundPos), cop
 
 Base.print    (x :: Instance               ) = println(x) 
 
-aculAns = true
-output  = false
-
-debug   = false
-debug2  = false
+@everywhere aculAns = true
+@everywhere output  = true
+@everywhere 
+@everywhere debug   = false
+@everywhere debug2  = false
 
 @everywhere function isInt(n)
     return abs(n) == trunc(abs(n))
@@ -168,6 +168,95 @@ end
     return q
 end
 
+@everywhere function branch(w :: Instance, times :: Int)
+    heapSize = 1
+
+    iterations = 0
+
+    heap = binary_maxheap(Instance)
+
+    push!(heap, lp)
+
+    best = 0.0
+    bestSol = (lp)
+
+    while length(heap) > 0 && iterations < times
+        iterations += 1
+
+        stopper -= 1
+        if stopper == 0 break end
+
+        w = pop!(heap)
+
+        if w.obj <= best
+            if debug println("Skipping...") end
+            continue
+        else
+            if debug println("\n----------\n", w, "\nHeap size = ", length(heap), "") end
+
+            if isSolved(w)
+                if w.obj > best
+
+                    best, bestSol = w.obj, w
+
+                    if aculAns 
+                        push!(feasible, w)
+                    end
+                end
+
+                if debug println("\nFeasible solution found!\n") end
+            else
+                for i in 1:w.size
+                    if !isInt(w.x[i])
+
+                        if debug println("\nBranching at $i") end
+
+                        down = branchDown( copy(w), i, -1 )
+                        up   = branchUp  ( copy(w), i, +1 )
+
+                        heapSize += 2
+
+                        if debug println(up.obj, " ", down.obj, " $best") end
+
+                        if up != None && up > best
+                            if isSolved(up)
+                                if debug println("\nFeasible solution found!\n", up, "\n") end
+
+                                best, bestSol = up.obj, up
+
+                                if aculAns 
+                                    push!(feasible, up)
+                                end
+                            end
+
+                            push!(heap, up)
+                        end
+
+                        if down != None && down > best
+                            if isSolved(down)
+                                if debug println("\nFeasible solution found!\n", down, "\n") end
+
+                                best, bestSol = down.obj, down
+
+                                if aculAns 
+                                    push!(feasible, down)
+                                end
+                            end
+
+                            push!(heap, down)
+                        end
+
+                        break
+
+                    end
+                end
+            end
+        end
+    end
+
+    return heap
+end
+
 function main(size, random)
 
     heapSize = 1
@@ -181,8 +270,6 @@ function main(size, random)
 
     best = 0.0
     bestSol = (lp)
-
-    stopper = 10000
 
     while length(heap) > 0
         stopper -= 1
@@ -273,4 +360,3 @@ function main(size, random)
 
 end
 
-for i in 2025:25:10000 tic(); x = main(i, true); println(STDERR,i); println("$i ", toq(), " $x") end
