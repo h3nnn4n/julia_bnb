@@ -34,6 +34,8 @@ Base.print    (x :: Instance               ) = println(x)
 @everywhere debug   = false
 @everywhere debug2  = false
 
+@everywhere branchingFactor = 500
+
 @everywhere function isInt(n)
     return abs(n) == trunc(abs(n))
 end
@@ -260,89 +262,88 @@ end
 
 function main(size, random)
 
-    heapSize = 1
-    feasible = Instance[]
-
     lp = doKnapSack(newKnapSack(size, random)) 
 
-    heap = binary_maxheap(Instance)
+    heap, feasible = branch(lp, 20) ## Populates the tree with something to do
+    heapSize = length(heap)
 
-    push!(heap, lp)
+    np = nworkers()
 
-    best = 0.0
-    bestSol = (lp)
+    queue  = cell(np)
+    answer = cell(np) 
 
-    while length(heap) > 0
-        stopper -= 1
-        if stopper == 0 break end
+    for i in 1:np
+        answer[i] = RemoteRef()
+    end
 
-        w = pop!(heap)
+    ## Spawns the best candidates distribuitivelly, one per worker
 
-        if w.obj <= best
-            if debug println("Skipping...") end
-            continue
-        else
-            if debug println("\n----------\n", w, "\nHeap size = ", length(heap), "") end
+    println(queue)
 
-            if isSolved(w)
-                if w.obj > best
+    i = 1
 
-                    best, bestSol = w.obj, w
+    resetidx() = (i=1; i)
 
-                    if aculAns 
-                        push!(feasible, w)
+    nextidx() = (idx=i; i+=1; idx)
+
+    for wpid in workers()
+        idx = nextidx()
+        println(idx)
+        queue[idx] = pop!(heap)
+    end
+
+    resetidx()
+
+    @async begin
+        for wpid in workers()
+            idx = nextidx()
+            answer[idx] = remotecall(wpid, branch, queue[idx], branchingFactor)
+        end
+    end
+
+    println(" ")
+
+    @sync begin
+        counter = [ false for i in 1:np ]
+        ok = true
+        while ok
+            println(counter)
+            for i in 1:np
+                #=println(isready(answer[i]), " ",  counter[i])=#
+
+                if !counter[i] && isready(answer[i])
+                    h, f = fetch(answer[i])
+
+                    counter[i] = true
+
+                    println("copy copy")
+
+                    while length(h) > 0
+                        q = pop!(h)
+                        push!(heap, q)
+                    end
+
+                    while length(f) > 0
+                        q = pop!(f)
+                        push!(feasible, q)
                     end
                 end
+            end
 
-                if debug println("\nFeasible solution found!\n") end
-            else
-                for i in 1:w.size
-                    if !isInt(w.x[i])
+            println(counter)
 
-                        if debug println("\nBranching at $i") end
+            ok = false
 
-                        down = branchDown( copy(w), i, -1 )
-                        up   = branchUp  ( copy(w), i, +1 )
-
-                        heapSize += 2
-
-                        if debug println(up.obj, " ", down.obj, " $best") end
-
-                        if up != None && up > best
-                            if isSolved(up)
-                                if debug println("\nFeasible solution found!\n", up, "\n") end
-
-                                best, bestSol = up.obj, up
-
-                                if aculAns 
-                                    push!(feasible, up)
-                                end
-                            end
-
-                            push!(heap, up)
-                        end
-
-                        if down != None && down > best
-                            if isSolved(down)
-                                if debug println("\nFeasible solution found!\n", down, "\n") end
-
-                                best, bestSol = down.obj, down
-
-                                if aculAns 
-                                    push!(feasible, down)
-                                end
-                            end
-
-                            push!(heap, down)
-                        end
-
-                        break
-
-                    end
+            for i in 1:np
+                if !counter[i]
+                    println("Not ok byut ok")
+                    ok = true
                 end
             end
         end
     end
+
+#####################################################################################
 
     if output
         println("\n======================================================")
