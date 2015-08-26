@@ -30,7 +30,7 @@ Base.print    (x :: Instance               ) = println(x)
 
 @everywhere aculAns = true
 @everywhere output  = true
-@everywhere 
+
 @everywhere debug   = false
 @everywhere debug2  = false
 
@@ -53,7 +53,7 @@ end
         return Instance(rand(1:size, size),
                         rand(1:size, size), 
                         size, 
-                        size*100,
+                        size,
                         [],
                         [],
                         -1.0
@@ -168,10 +168,13 @@ end
     return q
 end
 
-@everywhere function branch(w :: Instance, times :: Int)
+@everywhere function branch(new :: Instance, times :: Int)
     heapSize = 1
 
     iterations = 0
+    feasible = Instance[]
+
+    lp = doKnapSack(new)
 
     heap = binary_maxheap(Instance)
 
@@ -182,9 +185,6 @@ end
 
     while length(heap) > 0 && iterations < times
         iterations += 1
-
-        stopper -= 1
-        if stopper == 0 break end
 
         w = pop!(heap)
 
@@ -254,7 +254,8 @@ end
         end
     end
 
-    return heap
+    return heap, feasible
+
 end
 
 function main(size, random)
