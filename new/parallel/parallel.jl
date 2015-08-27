@@ -1,5 +1,5 @@
-using GLPK
-using DataStructures
+@everywhere using GLPK
+@everywhere using DataStructures
 
 @everywhere type Restriction
     boundPos     :: Int
@@ -19,22 +19,26 @@ end
     obj          :: Float64
 end
 
-Base.isless   (x :: Instance, y :: Instance) = (x.obj) < (y.obj)
-Base.isless   (x :: Instance, y            ) = (x.obj) < (y)
-Base.isless   (x            , y :: Instance) = (x)     < (y.obj)
+@everywhere ( Base.isless   (x :: Instance, y :: Instance) = (x.obj) < (y.obj) ) 
+@everywhere ( Base.isless   (x :: Instance, y            ) = (x.obj) < (y)     ) 
+@everywhere ( Base.isless   (x            , y :: Instance) = (x)     < (y.obj) ) 
 
-Base.copy     (x :: Instance               ) = Instance(copy(x.weight), copy(x.profit), copy(x.size), copy(x.capacity), copy(x.x), copy(x.restrictions), copy(x.obj))
-Base.copy     (x :: Restriction            ) = Restriction(copy(x.boundPos), copy(x.boundType))
+@everywhere ( Base.copy     (x :: Instance               ) = Instance(copy(x.weight), copy(x.profit), copy(x.size), copy(x.capacity), copy(x.x), copy(x.restrictions), copy(x.obj)) ) 
+@everywhere ( Base.copy     (x :: Restriction            ) = Restriction(copy(x.boundPos), copy(x.boundType)) ) 
 
-Base.print    (x :: Instance               ) = println(x) 
+@everywhere ( Base.print    (x :: Instance               ) = println(x)        )
 
-@everywhere aculAns = true
+@everywhere aculAns = false
 @everywhere output  = true
 
 @everywhere debug   = false
 @everywhere debug2  = false
 
 @everywhere branchingFactor = 500
+
+@everywhere param          = GLPK.SimplexParam()
+@everywhere param.msg_lev  = GLPK.MSG_ERR
+@everywhere param.presolve = GLPK.ON
 
 @everywhere function isInt(n)
     return abs(n) == trunc(abs(n))
@@ -71,10 +75,6 @@ end
                         )
     end
 end
-
-param = GLPK.SimplexParam()
-param.msg_lev = GLPK.MSG_ERR
-param.presolve = GLPK.ON
 
 @everywhere function doKnapSack(w :: Instance)
 
@@ -171,6 +171,7 @@ end
 end
 
 @everywhere function branch(new :: Instance, times :: Int)
+    println("typeof: ", typeof(new))
     heapSize = 1
 
     iterations = 0
@@ -229,9 +230,9 @@ end
                                 if aculAns 
                                     push!(feasible, up)
                                 end
+                            else
+                                push!(heap, up)
                             end
-
-                            push!(heap, up)
                         end
 
                         if down != None && down > best
@@ -243,9 +244,9 @@ end
                                 if aculAns 
                                     push!(feasible, down)
                                 end
+                            else
+                                push!(heap, down)
                             end
-
-                            push!(heap, down)
                         end
 
                         break
@@ -261,6 +262,7 @@ end
 end
 
 function main(size, random)
+    println("Starting...")
 
     lp = doKnapSack(newKnapSack(size, random)) 
 
@@ -271,6 +273,10 @@ function main(size, random)
 
     queue  = cell(np)
     answer = cell(np) 
+
+    bestRel = lp.obj
+    best    = 0.0
+    bestSol = lp
 
     for i in 1:np
         answer[i] = RemoteRef()
@@ -304,44 +310,68 @@ function main(size, random)
     println(" ")
 
     @sync begin
-        counter = [ false for i in 1:np ]
-        ok = true
-        while ok
-            println(counter)
+        resetidx()
+        pids    = workers() 
+        ok      = true
+        while length(heap) > 0
             for i in 1:np
-                #=println(isready(answer[i]), " ",  counter[i])=#
+                println(length(heap), " ",  i)
+                if isready(answer[i])
+                    h, f  = fetch(answer[i])
 
-                if !counter[i] && isready(answer[i])
-                    h, f = fetch(answer[i])
-
-                    counter[i] = true
-
-                    println("copy copy")
+                    println("llll ", length(h), " ", length(f))
 
                     while length(h) > 0
                         q = pop!(h)
-                        push!(heap, q)
+
+                        if q.obj > best
+                            if isSolved(q) 
+                                best    = q.obj
+                                bestSol = copy(q)
+                                println("Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel)
+                            end
+
+                            push!(heap, q)
+                        end
                     end
 
                     while length(f) > 0
                         q = pop!(f)
-                        push!(feasible, q)
+
+                        if q > best
+                            best    = q.obj
+                            bestSol = copy(q)
+                            println("Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel)
+                        end
+
+                        if aculAns 
+                            push!(feasible, q)
+                        end
+                    end
+
+                    
+                    @sync begin
+                        if length(heap) > 0
+
+                            answer[i] = RemoteRef()
+                            w         = copy(pop!(heap))
+
+                            #=@async put!(answer[i], remotecall(pids[i], branch, w, branchingFactor))=#
+                            #=@async answer[i] = remotecall(pids[i], branch, w, branchingFactor)=#
+
+                            #=if typeof(w) != typeof(lp)=#
+                                #=println(w, " ", typeof(w))=#
+                            #=end=#
+
+                            answer[i] = remotecall(pids[i], branch, w, branchingFactor)
+                        else
+                            continue
+                        end
                     end
                 end
             end
-
-            println(counter)
-
-            ok = false
-
-            for i in 1:np
-                if !counter[i]
-                    println("Not ok byut ok")
-                    ok = true
-                end
-            end
         end
-    end
+    end # Begin
 
 #####################################################################################
 
@@ -352,6 +382,7 @@ function main(size, random)
             for ans in feasible
                 println(ans.obj, "")
             end
+            println(best)
         else
             println(best)
         end
@@ -359,6 +390,6 @@ function main(size, random)
     end
 
     return heapSize
-
 end
 
+main (250, true)
