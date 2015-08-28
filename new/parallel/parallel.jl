@@ -28,17 +28,23 @@ end
 
 @everywhere ( Base.print    (x :: Instance               ) = println(x)        )
 
+####################################
+# OUTPUT AND DEBUG RELATED OPTIONS #
+####################################
+
 @everywhere aculAns = false
-@everywhere output  = true
+@everywhere output  = false
 
 @everywhere debug   = false
 @everywhere debug2  = false
 
-@everywhere branchingFactor = 500
+@everywhere branchingFactor = 1000
 
 @everywhere param          = GLPK.SimplexParam()
 @everywhere param.msg_lev  = GLPK.MSG_ERR
 @everywhere param.presolve = GLPK.ON
+
+################################### 
 
 @everywhere function isInt(n)
     return abs(n) == trunc(abs(n))
@@ -79,7 +85,6 @@ end
 @everywhere function doKnapSack(w :: Instance)
 
     for i in 1:length(w.x)[1]
-        #=println(i)=#
         if w.x[i] < 0.0 || w.x[i] > 1.0
             return None
         end
@@ -171,20 +176,24 @@ end
 end
 
 @everywhere function branch(new :: Instance, times :: Int)
-    println("typeof: ", typeof(new))
-    heapSize = 1
+    #=println("typeof: ", typeof(new))=#
 
     iterations = 0
     feasible = Instance[]
 
-    lp = doKnapSack(new)
-
     heap = binary_maxheap(Instance)
 
+    lp = doKnapSack(new)
+
+    if typeof(lp) != Instance
+        return heap, []
+    end
+
     push!(heap, lp)
+    heapSize = length(heap)
 
     best = 0.0
-    bestSol = (lp)
+    bestSol = copy(lp)
 
     while length(heap) > 0 && iterations < times
         iterations += 1
@@ -225,7 +234,7 @@ end
                             if isSolved(up)
                                 if debug println("\nFeasible solution found!\n", up, "\n") end
 
-                                best, bestSol = up.obj, up
+                                best, bestSol = up.obj, copy(up)
 
                                 if aculAns 
                                     push!(feasible, up)
@@ -239,7 +248,7 @@ end
                             if isSolved(down)
                                 if debug println("\nFeasible solution found!\n", down, "\n") end
 
-                                best, bestSol = down.obj, down
+                                best, bestSol = down.obj, copy(down)
 
                                 if aculAns 
                                     push!(feasible, down)
@@ -257,12 +266,21 @@ end
         end
     end
 
-    return heap, feasible
+    if length(heap) == 0
+        #=println("Empty heap, returning best feasible solution found")=#
+    else
+        #=println("Max number of iterations reached, stoping... #", length(heap), " nodes left")=#
+    end
 
+    if aculAns
+        return heap, feasible
+    else
+        return heap, [bestSol]
+    end
 end
 
-function main(size, random)
-    println("Starting...")
+function main(size, random, bFactor = 500)
+    if output println("Starting...") end
 
     lp = doKnapSack(newKnapSack(size, random)) 
 
@@ -284,7 +302,7 @@ function main(size, random)
 
     ## Spawns the best candidates distribuitivelly, one per worker
 
-    println(queue)
+    #=println(queue)=#
 
     i = 1
 
@@ -294,41 +312,37 @@ function main(size, random)
 
     for wpid in workers()
         idx = nextidx()
-        println(idx)
+        #=println(idx)=#
         queue[idx] = pop!(heap)
     end
 
     resetidx()
 
-    @async begin
+    @sync begin
         for wpid in workers()
             idx = nextidx()
-            answer[idx] = remotecall(wpid, branch, queue[idx], branchingFactor)
+            answer[idx] = remotecall(wpid, branch, queue[idx], bFactor)
+            #=answer[idx] = remotecall(wpid, branch, queue[idx], branchingFactor)=#
         end
     end
 
-    println(" ")
-
     @sync begin
-        resetidx()
         pids    = workers() 
-        ok      = true
+
         while length(heap) > 0
             for i in 1:np
-                println(length(heap), " ",  i)
+                #=println(length(heap), " ",  i)=#
                 if isready(answer[i])
                     h, f  = fetch(answer[i])
-
-                    println("llll ", length(h), " ", length(f))
 
                     while length(h) > 0
                         q = pop!(h)
 
                         if q.obj > best
                             if isSolved(q) 
-                                best    = q.obj
+                                best    = copy(q.obj)
                                 bestSol = copy(q)
-                                println("Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel)
+                                if debug println("Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel) end
                             end
 
                             push!(heap, q)
@@ -339,9 +353,9 @@ function main(size, random)
                         q = pop!(f)
 
                         if q > best
-                            best    = q.obj
+                            best    = copy(q.obj)
                             bestSol = copy(q)
-                            println("Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel)
+                            if debug println("Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel) end
                         end
 
                         if aculAns 
@@ -351,22 +365,22 @@ function main(size, random)
 
                     
                     @sync begin
-                        if length(heap) > 0
+                        while length(heap) > 0
+                            w = (pop!(heap))
 
-                            answer[i] = RemoteRef()
-                            w         = copy(pop!(heap))
+                            if w.obj > best
+                                answer[i] = RemoteRef()
+                                answer[i] = remotecall(pids[i], branch, w, branchingFactor)
 
-                            #=@async put!(answer[i], remotecall(pids[i], branch, w, branchingFactor))=#
-                            #=@async answer[i] = remotecall(pids[i], branch, w, branchingFactor)=#
-
-                            #=if typeof(w) != typeof(lp)=#
-                                #=println(w, " ", typeof(w))=#
-                            #=end=#
-
-                            answer[i] = remotecall(pids[i], branch, w, branchingFactor)
-                        else
-                            continue
+                                break
+                            end
                         end
+
+                        #=if length(heap) > 0=#
+
+                        #=else=#
+                            #=continue=#
+                        #=end=#
                     end
                 end
             end
@@ -385,6 +399,7 @@ function main(size, random)
             println(best)
         else
             println(best)
+            println(bestSol.x)
         end
         println(  "======================================================")
     end
@@ -392,4 +407,4 @@ function main(size, random)
     return heapSize
 end
 
-main (250, true)
+#=main (250, true)=#
