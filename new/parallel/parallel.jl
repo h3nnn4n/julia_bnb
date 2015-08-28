@@ -407,4 +407,34 @@ function main(size, random, bFactor = 500)
     return heapSize
 end
 
-#=main (250, true)=#
+function tester()
+    main(100, true, 100) ## Pre heating =D
+
+    np = nworkers()
+
+    println(STDERR, "Starting...")
+    for size in 500:250:1000
+        out = open("new_data$(np)_$(size)_.log", "w")
+        println(STDERR, "-----------------------------------------")
+
+        for bFactor in 10:10:250
+            iters = 10
+            timePassed = 0.0
+
+            for i in 1:iters 
+                tic()
+                x = main(size, true, bFactor)
+                timePassed += toq()
+            end
+
+            println(     "$size ", timePassed/iters, " $bFactor")
+            println(out, "$size ", timePassed/iters, " $bFactor")
+        end
+        close(out)
+    end
+
+    println(STDERR, "-----------------------------------------")
+    println(STDERR, "Finished")
+end
+
+tester()
