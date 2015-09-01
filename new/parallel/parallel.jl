@@ -405,7 +405,7 @@ function tester()
 
     np = nworkers()
 
-    iters = 2
+    iters = 20
 
     println(STDERR, "Starting...")
     #=for size in 500:250:1000=#
@@ -413,7 +413,7 @@ function tester()
         out = open("new_data$(np)_$(size)_.log", "w")
         println(STDERR, "-----------------------------------------")
 
-        for bFactor in 1:1:50
+        for bFactor in 1:5:50
             timePassed = 0.0
 
             for i in 1:iters 
