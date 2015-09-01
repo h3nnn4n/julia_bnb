@@ -175,9 +175,7 @@ end
     return q
 end
 
-@everywhere function branch(new :: Instance, times :: Int)
-    #=println("typeof: ", typeof(new))=#
-
+@everywhere function branch(new :: Instance, times :: Int, best :: Float64, bestSol :: Instance)
     iterations = 0
     feasible = Instance[]
 
@@ -192,8 +190,8 @@ end
     push!(heap, lp)
     heapSize = length(heap)
 
-    best = 0.0
-    bestSol = copy(lp)
+    #=best = 0.0=#
+    #=bestSol = copy(lp)=#
 
     while length(heap) > 0 && iterations < times
         iterations += 1
@@ -284,7 +282,7 @@ function main(size, random, bFactor = 500)
 
     lp = doKnapSack(newKnapSack(size, random)) 
 
-    heap, feasible = branch(lp, 20) ## Populates the tree with something to do
+    heap, feasible = branch(lp, 20, 0.0, copy(lp)) ## Populates the tree with something to do
     heapSize = length(heap)
 
     np = nworkers()
@@ -302,8 +300,6 @@ function main(size, random, bFactor = 500)
 
     ## Spawns the best candidates distribuitivelly, one per worker
 
-    #=println(queue)=#
-
     i = 1
 
     resetidx() = (i=1; i)
@@ -312,17 +308,22 @@ function main(size, random, bFactor = 500)
 
     for wpid in workers()
         idx = nextidx()
-        #=println(idx)=#
-        queue[idx] = pop!(heap)
+        if length(heap) > 0 
+            queue[idx] = pop!(heap)
+        else
+            return false
+        end
     end
 
     resetidx()
 
     @sync begin
-        for wpid in workers()
-            idx = nextidx()
-            answer[idx] = remotecall(wpid, branch, queue[idx], bFactor)
-            #=answer[idx] = remotecall(wpid, branch, queue[idx], branchingFactor)=#
+        @async begin
+            for wpid in workers()
+                idx = nextidx()
+                answer[idx] = remotecall(wpid, branch, queue[idx], bFactor, best, copy(bestSol))
+                #=answer[idx] = remotecall(wpid, branch, queue[idx], branchingFactor)=#
+            end
         end
     end
 
@@ -362,7 +363,6 @@ function main(size, random, bFactor = 500)
                             push!(feasible, q)
                         end
                     end
-
                     
                     @sync begin
                         while length(heap) > 0
@@ -370,17 +370,10 @@ function main(size, random, bFactor = 500)
 
                             if w.obj > best
                                 answer[i] = RemoteRef()
-                                answer[i] = remotecall(pids[i], branch, w, branchingFactor)
-
+                                answer[i] = remotecall(pids[i], branch, w, branchingFactor, best, copy(bestSol))
                                 break
                             end
                         end
-
-                        #=if length(heap) > 0=#
-
-                        #=else=#
-                            #=continue=#
-                        #=end=#
                     end
                 end
             end
@@ -404,7 +397,7 @@ function main(size, random, bFactor = 500)
         println(  "======================================================")
     end
 
-    return heapSize
+    return true
 end
 
 function tester()
@@ -412,18 +405,23 @@ function tester()
 
     np = nworkers()
 
+    iters = 2
+
     println(STDERR, "Starting...")
-    for size in 500:250:1000
+    #=for size in 500:250:1000=#
+    for size in 500:250:500
         out = open("new_data$(np)_$(size)_.log", "w")
         println(STDERR, "-----------------------------------------")
 
-        for bFactor in 10:10:250
-            iters = 10
+        for bFactor in 1:1:50
             timePassed = 0.0
 
             for i in 1:iters 
-                tic()
-                x = main(size, true, bFactor)
+                ret = false
+                while !ret
+                    tic()
+                    ret = main(size, true, bFactor)
+                end
                 timePassed += toq()
             end
 
