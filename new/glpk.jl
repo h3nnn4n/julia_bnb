@@ -29,7 +29,7 @@ Base.copy     (x :: Restriction            ) = Restriction(copy(x.boundPos), cop
 Base.print    (x :: Instance               ) = println(x) 
 
 aculAns = true
-output  = false
+output  = true
 
 debug   = false
 debug2  = false
@@ -48,12 +48,20 @@ end
     return true
 end
 
+@everywhere function KnapSack_file(name)
+    q = open(name,"r")
+    x = readline(q)
+    w = eval(parse(x))
+
+    return w
+end
+
 @everywhere function newKnapSack(size :: Int, random = true)
     if random
         return Instance(rand(1:size, size),
                         rand(1:size, size), 
                         size, 
-                        size,
+                        size*50,
                         [],
                         [],
                         -1.0
@@ -173,20 +181,20 @@ function main(size, random)
     heapSize = 1
     feasible = Instance[]
 
-    lp = doKnapSack(newKnapSack(size, random)) 
+    #=lp = doKnapSack(newKnapSack(size, random)) =#
+    lp = doKnapSack(KnapSack_file("instance.dat")) 
 
     heap = binary_maxheap(Instance)
 
     push!(heap, lp)
 
+    bestRel = lp.obj
     best = 0.0
     bestSol = (lp)
 
-    stopper = 10000
+    println("Starting...")
 
     while length(heap) > 0
-        stopper -= 1
-        if stopper == 0 break end
 
         w = pop!(heap)
 
@@ -223,6 +231,7 @@ function main(size, random)
                         if up != None && up > best
                             if isSolved(up)
                                 if debug println("\nFeasible solution found!\n", up, "\n") end
+                                println("Feasible solution found: ", up.obj, "\t ratio: ", up.obj / bestRel)
 
                                 best, bestSol = up.obj, up
 
@@ -237,6 +246,7 @@ function main(size, random)
                         if down != None && down > best
                             if isSolved(down)
                                 if debug println("\nFeasible solution found!\n", down, "\n") end
+                                println("Feasible solution found: ", down.obj, "\t ratio: ", down.obj / bestRel)
 
                                 best, bestSol = down.obj, down
 
@@ -247,6 +257,7 @@ function main(size, random)
 
                             push!(heap, down)
                         end
+
                         break
 
                     end
@@ -272,4 +283,6 @@ function main(size, random)
 
 end
 
-for i in 100:100:10000 tic(); x = main(i, true); println("$i ", toq(), " $x") end
+main(2500,true)
+
+#=for i in 100:25:10000 tic(); x = main(i, true); println(STDERR,i); println("$i ", toq(), " $x") end=#

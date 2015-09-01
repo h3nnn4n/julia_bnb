@@ -46,6 +46,14 @@ end
 
 ################################### 
 
+@everywhere function KnapSack_file(name)
+    q = open(name,"r")
+    x = readline(q)
+    w = eval(parse(x))
+
+    return w
+end
+
 @everywhere function isInt(n)
     return abs(n) == trunc(abs(n))
 end
@@ -280,7 +288,8 @@ end
 function main(size, random, bFactor = 500)
     if output println("Starting...") end
 
-    lp = doKnapSack(newKnapSack(size, random)) 
+    #=lp = doKnapSack(newKnapSack(size, random)) =#
+    lp = doKnapSack(KnapSack_file("instance.dat")) 
 
     heap, feasible = branch(lp, 20, 0.0, copy(lp)) ## Populates the tree with something to do
     heapSize = length(heap)
@@ -435,4 +444,4 @@ function tester()
     println(STDERR, "Finished")
 end
 
-tester()
+#=tester()=#
