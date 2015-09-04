@@ -296,7 +296,7 @@ function main(size, random, bFactor = 50)
     lp = doKnapSack(newKnapSack(size, random))
     #=lp = doKnapSack(KnapSack_file("instance.dat"))=#
 
-    heap, feasible = branch(lp, 20, 0.0, copy(lp)) ## Populates the tree with something to do
+    heap, feasible = branch(lp, 100, 0.0, copy(lp)) ## Populates the tree with something to do
     heapSize = length(heap)
 
     np = nworkers()
@@ -381,14 +381,18 @@ function main(size, random, bFactor = 50)
                         push!(feasible, q)
                     end
                 end
-                
+
                 while length(heap) > 0
                     w = (pop!(heap))
 
                     if w.obj > best
                         control[i] = false
                         answer[i] = RemoteRef()
-                        answer[i] = remotecall(pids[i], branch, w, branchingFactor, best, copy(bestSol))
+                        if i == 1
+                            answer[i] = remotecall(pids[i], branch, w, 10, best, copy(bestSol))
+                        end
+                            answer[i] = remotecall(pids[i], branch, w, branchingFactor, best, copy(bestSol))
+                        end
                         break
                     end
                 end
@@ -414,7 +418,7 @@ function main(size, random, bFactor = 50)
             println(best)
         else
             println(best)
-            println(bestSol.x)
+            #=println(bestSol.x)=#
         end
         println(  "======================================================")
     end
@@ -428,16 +432,14 @@ function tester()
     np = nworkers()
 
     iters = 5
-    size = 666
-
 
     println(STDERR, "Comencing number crushing...")
 
-    for size in 500:250:1000
+    for size in 1000:500:3000
         println(STDERR, "-----------------------------------------")
         out = open("new_data_$(np)_$(size)_.log", "w")
 
-        for bFactor in 25:25:250
+        for bFactor in 5:5:50
             timePassed = 0.0
 
             for i in 1:iters 
@@ -460,6 +462,6 @@ function tester()
     println(STDERR, "Finished")
 end
 
-#=@time main(1000, false, 5)=#
+@time main(3000, true, 50)
 
-@time tester()
+#=@time tester()=#
