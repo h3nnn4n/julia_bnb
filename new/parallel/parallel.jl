@@ -337,7 +337,7 @@ function main(size, random, bFactor = 50)
         @async begin
             for wpid in workers()
                 idx = nextidx()
-                answer[idx] = remotecall(wpid, branch, queue[idx], bFactor, best, copy(bestSol))
+                answer[idx] = remotecall(wpid, branch, queue[idx], int(branchingFactor/i), best, copy(bestSol))
             end
         end
     end
@@ -388,11 +388,7 @@ function main(size, random, bFactor = 50)
                     if w.obj > best
                         control[i] = false
                         answer[i] = RemoteRef()
-                        if i == 1
-                            answer[i] = remotecall(pids[i], branch, w, 10, best, copy(bestSol))
-                        end
-                            answer[i] = remotecall(pids[i], branch, w, branchingFactor, best, copy(bestSol))
-                        end
+                        answer[i] = remotecall(pids[i], branch, w, int(branchingFactor/i), best, copy(bestSol))
                         break
                     end
                 end
@@ -431,15 +427,15 @@ function tester()
 
     np = nworkers()
 
-    iters = 5
+    iters = 10
 
     println(STDERR, "Comencing number crushing...")
 
-    for size in 1000:500:3000
+    for size in 500:500:500
         println(STDERR, "-----------------------------------------")
         out = open("new_data_$(np)_$(size)_.log", "w")
 
-        for bFactor in 5:5:50
+        for bFactor in 5:50:506
             timePassed = 0.0
 
             for i in 1:iters 
@@ -462,6 +458,6 @@ function tester()
     println(STDERR, "Finished")
 end
 
-@time main(3000, true, 50)
+#=@time main(500, true, 500)=#
 
-#=@time tester()=#
+@time tester()
