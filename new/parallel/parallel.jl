@@ -37,6 +37,7 @@ end
 
 @everywhere debug   = false
 @everywhere debug2  = false
+@everywhere status  = false
 
 @everywhere branchingFactor = 1000
 
@@ -55,7 +56,7 @@ end
 end
 
 @everywhere function isInt(n)
-    return abs(n) == trunc(abs(n))
+    return int(n) == n
 end
 
 @everywhere function isSolved(w :: Instance)
@@ -281,20 +282,26 @@ end
     if aculAns
         return heap, feasible
     else
-        return heap, [bestSol]
+        if isSolved(bestSol)
+            return heap, [bestSol]
+        else
+            return heap, []
+        end
     end
 end
 
-function main(size, random, bFactor = 500)
+function main(size, random, bFactor = 50)
     if output println("Starting...") end
 
-    #=lp = doKnapSack(newKnapSack(size, random)) =#
-    lp = doKnapSack(KnapSack_file("instance.dat")) 
+    lp = doKnapSack(newKnapSack(size, random))
+    #=lp = doKnapSack(KnapSack_file("instance.dat"))=#
 
     heap, feasible = branch(lp, 20, 0.0, copy(lp)) ## Populates the tree with something to do
     heapSize = length(heap)
 
     np = nworkers()
+
+    control = falses(np)
 
     queue  = cell(np)
     answer = cell(np) 
@@ -331,63 +338,69 @@ function main(size, random, bFactor = 500)
             for wpid in workers()
                 idx = nextidx()
                 answer[idx] = remotecall(wpid, branch, queue[idx], bFactor, best, copy(bestSol))
-                #=answer[idx] = remotecall(wpid, branch, queue[idx], branchingFactor)=#
             end
         end
     end
 
-    @sync begin
-        pids    = workers() 
+    pids    = workers() 
 
-        while length(heap) > 0
-            for i in 1:np
-                #=println(length(heap), " ",  i)=#
-                if isready(answer[i])
-                    h, f  = fetch(answer[i])
+    ok = false
 
-                    while length(h) > 0
-                        q = pop!(h)
+    while !ok
+        for i in 1:np
+            if isready(answer[i])
+                control[i] = true
 
-                        if q.obj > best
-                            if isSolved(q) 
-                                best    = copy(q.obj)
-                                bestSol = copy(q)
-                                if debug println("Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel) end
-                            end
+                h, f  = fetch(answer[i])
 
+                while length(h) > 0
+                    q = pop!(h)
+
+                    if q.obj > best
+                        if isSolved(q) 
+                            best    = copy(q.obj)
+                            bestSol = copy(q)
+
+                            if status println("2 Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel) end
+                        else
                             push!(heap, q)
                         end
                     end
+                end
 
-                    while length(f) > 0
-                        q = pop!(f)
+                while length(f) > 0
+                    q = pop!(f)
 
-                        if q > best
-                            best    = copy(q.obj)
-                            bestSol = copy(q)
-                            if debug println("Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel) end
-                        end
-
-                        if aculAns 
-                            push!(feasible, q)
-                        end
+                    if q > best
+                        best    = copy(q.obj)
+                        bestSol = copy(q)
+                        if status println("  Feasible solution found: ", q.obj, "\t ratio: ", q.obj / bestRel) end
                     end
-                    
-                    @sync begin
-                        while length(heap) > 0
-                            w = (pop!(heap))
 
-                            if w.obj > best
-                                answer[i] = RemoteRef()
-                                answer[i] = remotecall(pids[i], branch, w, branchingFactor, best, copy(bestSol))
-                                break
-                            end
-                        end
+                    if aculAns 
+                        push!(feasible, q)
                     end
                 end
-            end
+                
+                while length(heap) > 0
+                    w = (pop!(heap))
+
+                    if w.obj > best
+                        control[i] = false
+                        answer[i] = RemoteRef()
+                        answer[i] = remotecall(pids[i], branch, w, branchingFactor, best, copy(bestSol))
+                        break
+                    end
+                end
+
+            end # if isready
+        end # For workers
+
+        ok = true
+        for i in length(control)
+           ok &= control[i] 
         end
-    end # Begin
+    end # While
 
 #####################################################################################
 
@@ -410,19 +423,21 @@ function main(size, random, bFactor = 500)
 end
 
 function tester()
-    main(100, true, 100) ## Pre heating =D
+    main(500, true, 4) ## Pre heating =D
 
     np = nworkers()
 
-    iters = 20
+    iters = 5
+    size = 666
 
-    println(STDERR, "Starting...")
-    #=for size in 500:250:1000=#
-    for size in 500:250:500
-        out = open("new_data$(np)_$(size)_.log", "w")
+
+    println(STDERR, "Comencing number crushing...")
+
+    for size in 500:250:1000
         println(STDERR, "-----------------------------------------")
+        out = open("new_data_$(np)_$(size)_.log", "w")
 
-        for bFactor in 1:5:50
+        for bFactor in 25:25:250
             timePassed = 0.0
 
             for i in 1:iters 
@@ -431,6 +446,7 @@ function tester()
                     tic()
                     ret = main(size, true, bFactor)
                 end
+                
                 timePassed += toq()
             end
 
@@ -444,4 +460,6 @@ function tester()
     println(STDERR, "Finished")
 end
 
-#=tester()=#
+#=@time main(1000, false, 5)=#
+
+@time tester()
