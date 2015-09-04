@@ -1,0 +1,9 @@
+ubuntu@noob:~/julia_bnb/new$ julia glpk.jl 
+Starting...
+Feasible solution found: 726897.0        ratio: 0.9999581989010092
+
+======================================================
+726897.0
+======================================================
+elapsed time: 389.416182514 seconds (2193157088 bytes allocated, 0.50% gc time)
+
